@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 定位初始化脚本和本地测试产物目录。
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NODE_SCRIPT="$SCRIPT_DIR/bootstrap-hadoop-node.sh"
 TEST_HOME="${TEST_HOME:-/tmp/hadoop-bootstrap-test}"
@@ -8,16 +9,20 @@ LOG_FILE="$TEST_HOME/bootstrap.log"
 RESULT_FILE="$TEST_HOME/wordcount-result.txt"
 HADOOP_VERSION="3.4.2"
 
+# 建立测试目录，并同时将终端输出保存到日志文件。
 mkdir -p "$TEST_HOME"
 exec > >(tee "$LOG_FILE") 2>&1
 
+# 检查初始化脚本语法，并在本机以单副本模式安装启动 Hadoop。
 bash -n "$NODE_SCRIPT"
 REPLICATION=1 bash "$NODE_SCRIPT" master localhost /dev/null
 JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")"
 
+# 以 Hadoop 用户封装 HDFS 和 Hadoop 命令。
 hdfs() { runuser -u hadoop -- env JAVA_HOME="$JAVA_HOME" HADOOP_HOME=/usr/local/hadoop HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop PATH="$JAVA_HOME/bin:/usr/local/hadoop/bin:/usr/local/hadoop/sbin" /usr/local/hadoop/bin/hdfs "$@"; }
 hadoop() { runuser -u hadoop -- env JAVA_HOME="$JAVA_HOME" HADOOP_HOME=/usr/local/hadoop HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop PATH="$JAVA_HOME/bin:/usr/local/hadoop/bin:/usr/local/hadoop/sbin" /usr/local/hadoop/bin/hadoop "$@"; }
 
+# 等待 NameNode 就绪后，向 HDFS 写入样例文本并运行 WordCount。
 for attempt in $(seq 1 30); do
     if hdfs dfsadmin -report >/dev/null 2>&1; then
         break
@@ -25,6 +30,7 @@ for attempt in $(seq 1 30); do
     sleep 2
 done
 
+# 核对词频输出，并显示 HDFS 集群报告。
 HDFS_TEST_DIR="/tmp/hadoop-bootstrap-wordcount-$$"
 LOCAL_INPUT="$TEST_HOME/input.txt"
 printf 'hadoop hadoop mapreduce\nmapreduce hadoop\n' > "$LOCAL_INPUT"

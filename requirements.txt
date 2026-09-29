@@ -1,0 +1,3 @@
+alibabacloud-ecs20140526>=5.0.0
+alibabacloud-tea-openapi>=0.3.12
+json5>=0.9.25

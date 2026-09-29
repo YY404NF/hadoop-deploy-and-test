@@ -1,0 +1,30 @@
+{
+  // 阿里云部署地域
+  "region_id": "cn-heyuan",
+  // 系统镜像 ID
+  "image_id": "ubuntu_26_04_x64_20G_alibase_20260916.vhd",
+  // 实例规格。
+  "instance_type": "ecs.e-c1m1.large",
+  // 创建实例数量
+  "instance_count": 100,
+  // ECS 名称和集群内网主机别名前缀
+  "name_prefix": "hadoop-lab",
+  // 已创建 VPC 的 ID
+  "vpc_id": "vpc-f8z0l6mskzvcczl2ufo85",
+  // 已创建交换机的 ID
+  "v_switch_id": "vsw-f8z3ol5kg7vghxkyo1wnl",
+  // 已创建安全组的 ID
+  "security_group_id": "sg-f8zh0i9gvr117xfkyiqs",
+  // SSH 登录用户（需与系统镜像的默认用户名匹配）
+  "ssh_user": "root",
+  // 每台 ECS 的系统盘容量（GB）
+  "system_disk_size_gb": 20,
+  // 自动释放时间（分钟，服务端按分钟处理并向后取整）
+  "lifetime_minutes": 31,
+  // 部署输出和测试代码共用的状态文件名
+  "output_file": "deployment-state.json",
+  // 本地生成的 SSH 私钥文件名
+  "private_key_file": "hadoop-lab-id_rsa",
+  // 阿里云密钥对名称前缀，创建时会附加时间戳
+  "key_pair_name_prefix": "hadoop-lab-key"
+}

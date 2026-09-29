@@ -1,0 +1,12 @@
+.aliyun-accessKey
+aliyun-token
+deployment-state.json
+hadoop-lab-id_rsa
+hadoop-lab-id_rsa.pub
+hadoop-lab-id_rsa-*
+hadoop-stage-id_rsa
+hadoop-stage-id_rsa.pub
+__pycache__/
+.venv/
+test-bootstrap-work/
+*.log

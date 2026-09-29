@@ -96,6 +96,7 @@ def ssh_command(host: str, user: str, private_key: str, command: str,
         "ssh", "-i", private_key,
         "-o", "BatchMode=yes",
         "-o", "ConnectTimeout=7",
+        "-o", f"UserKnownHostsFile={private_key}.known_hosts",
         "-o", "StrictHostKeyChecking=accept-new",
         "-o", "ServerAliveInterval=8",
         f"{user}@{host}", command,
@@ -133,6 +134,7 @@ def configure_hosts(nodes: list[dict[str, Any]], private_key: str, user: str) ->
     with ThreadPoolExecutor(max_workers=24) as pool:
         list(pool.map(lambda n: subprocess.run([
             "ssh", "-i", private_key, "-o", "BatchMode=yes",
+            "-o", f"UserKnownHostsFile={private_key}.known_hosts",
             "-o", "StrictHostKeyChecking=accept-new",
             f"{user}@{ssh_endpoint(n)}", command,
         ], check=True, timeout=25), nodes))
@@ -142,6 +144,7 @@ def configure_hosts(nodes: list[dict[str, Any]], private_key: str, user: str) ->
     with ThreadPoolExecutor(max_workers=24) as pool:
         list(pool.map(lambda node: subprocess.run([
             "ssh", "-i", private_key, "-o", "BatchMode=yes",
+            "-o", f"UserKnownHostsFile={private_key}.known_hosts",
             "-o", "StrictHostKeyChecking=accept-new",
             f"{user}@{ssh_endpoint(node)}", key_command,
         ], input=key_data, text=True, check=True, timeout=25), nodes))
@@ -156,7 +159,8 @@ def bootstrap_cluster(nodes: list[dict[str, Any]], private_key: str, user: str) 
     with tempfile.TemporaryDirectory() as temporary:
         workers_file = Path(temporary) / "workers"
         workers_file.write_text("".join(f"{node['name']}\n" for node in workers), encoding="utf-8")
-        subprocess.run(["scp", "-i", private_key, str(workers_file),
+        subprocess.run(["scp", "-i", private_key, "-o", f"UserKnownHostsFile={private_key}.known_hosts",
+                        "-o", "StrictHostKeyChecking=accept-new", str(workers_file),
                         f"{user}@{master_host}:/tmp/hadoop-workers"], check=True)
         script_url = "https://raw.githubusercontent.com/YY404NF/hadoop-deploy-and-test/main/bootstrap-hadoop-node.sh"
         for role, node, args in [
@@ -168,7 +172,8 @@ def bootstrap_cluster(nodes: list[dict[str, Any]], private_key: str, user: str) 
                 f"| RUN_USER=hadoop bash -s -- {role} {args}"
             )
             subprocess.run([
-                "ssh", "-i", private_key, f"{user}@{ssh_endpoint(node)}", command,
+                "ssh", "-i", private_key, "-o", f"UserKnownHostsFile={private_key}.known_hosts",
+                "-o", "StrictHostKeyChecking=accept-new", f"{user}@{ssh_endpoint(node)}", command,
             ], check=True)
 
 

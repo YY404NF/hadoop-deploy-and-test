@@ -27,6 +27,7 @@ def ssh(node: dict, key_path: str, command: str, timeout: int = 30):
         "ssh", "-i", key_path,
         "-o", "BatchMode=yes",
         "-o", "ConnectTimeout=8",
+        "-o", f"UserKnownHostsFile={key_path}.known_hosts",
         "-o", "StrictHostKeyChecking=accept-new",
         "-o", "ServerAliveInterval=8",
         f"{user}@{host}", command,
@@ -35,7 +36,7 @@ def ssh(node: dict, key_path: str, command: str, timeout: int = 30):
 
 def hadoop_command(command: str) -> str:
     """构造以 hadoop 用户和固定安装路径运行的命令。"""
-    return "runuser -u hadoop -- env JAVA_HOME=/usr/local/java8 HADOOP_HOME=/usr/local/hadoop HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop PATH=/usr/local/java8/bin:/usr/local/hadoop/bin:/usr/local/hadoop/sbin:$PATH " + command
+    return 'JAVA_HOME=$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")"); runuser -u hadoop -- env JAVA_HOME="$JAVA_HOME" HADOOP_HOME=/usr/local/hadoop HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop PATH="$JAVA_HOME/bin:/usr/local/hadoop/bin:/usr/local/hadoop/sbin:$PATH" ' + command
 
 
 def expiry_guard(state: dict) -> None:
@@ -78,8 +79,9 @@ def hadoop_test(state: dict, key_path: str, master: dict) -> int:
     script = f'''set -eu
 root="/tmp/hadoop-lab-check-$$"
 local_file="/tmp/hadoop-lab-check-$$.txt"
-HDFS="runuser -u hadoop -- env JAVA_HOME=/usr/local/java8 HADOOP_HOME={hadoop_home} HADOOP_CONF_DIR={hadoop_home}/etc/hadoop PATH=/usr/local/java8/bin:{hadoop_home}/bin:{hadoop_home}/sbin:$PATH {hadoop_home}/bin/hdfs"
-HADOOP="runuser -u hadoop -- env JAVA_HOME=/usr/local/java8 HADOOP_HOME={hadoop_home} HADOOP_CONF_DIR={hadoop_home}/etc/hadoop PATH=/usr/local/java8/bin:{hadoop_home}/bin:{hadoop_home}/sbin:$PATH {hadoop_home}/bin/hadoop"
+JAVA_HOME=$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")
+HDFS="runuser -u hadoop -- env JAVA_HOME=$JAVA_HOME HADOOP_HOME={hadoop_home} HADOOP_CONF_DIR={hadoop_home}/etc/hadoop PATH=$JAVA_HOME/bin:{hadoop_home}/bin:{hadoop_home}/sbin:$PATH {hadoop_home}/bin/hdfs"
+HADOOP="runuser -u hadoop -- env JAVA_HOME=$JAVA_HOME HADOOP_HOME={hadoop_home} HADOOP_CONF_DIR={hadoop_home}/etc/hadoop PATH=$JAVA_HOME/bin:{hadoop_home}/bin:{hadoop_home}/sbin:$PATH {hadoop_home}/bin/hadoop"
 printf 'hadoop hadoop mapreduce\\nmapreduce hadoop\\n' > "$local_file"
 eval "$HDFS dfs -mkdir -p \"$root/input\""
 eval "$HDFS dfs -put \"$local_file\" \"$root/input/input.txt\""
@@ -95,6 +97,7 @@ rm -f "$local_file"
     print("运行 Hadoop 示例 WordCount：")
     result = subprocess.run([
         "ssh", "-i", key_path, "-o", "BatchMode=yes", "-o", "ConnectTimeout=8",
+        "-o", f"UserKnownHostsFile={key_path}.known_hosts",
         "-o", "StrictHostKeyChecking=accept-new", f"{master.get('ssh_user', 'root')}@{ssh_endpoint(master)}",
         "bash -s",
     ], input=script, text=True, capture_output=True, timeout=300, check=True)

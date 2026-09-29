@@ -48,7 +48,7 @@ ECS 创建请求本身携带服务端 `AutoReleaseTime`，按请求时间设置�
 
 ## Hadoop 初始化脚本
 
-`deploy.py` 会让每台实例直接从 GitHub 下载 `bootstrap-hadoop-node.sh` 并执行。脚本通过阿里云 Ubuntu 软件源安装 OpenJDK 8；主节点从 Apache 镜像下载 Hadoop 3.4.2，再通过内网 HTTP 服务分发给子节点。最后自动运行 `test.py`。
+`deploy.py` 会让每台实例直接从 GitHub 下载 `bootstrap-hadoop-node.sh` 并执行。脚本通过阿里云 Ubuntu 软件源安装 OpenJDK 8；主节点从 Apache 镜像下载 Hadoop 3.4.2，再通过内网 HTTP 服务分发给子节点。Hadoop 不在该 Ubuntu 软件源中。最后自动运行 `test.py`。
 
 单独手动初始化节点时，在主节点准备 workers 清单（一行一个内网主机名），然后运行正式脚本：
 

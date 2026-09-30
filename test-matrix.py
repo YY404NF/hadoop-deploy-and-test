@@ -109,6 +109,11 @@ def main() -> None:
     repeats = int(config["repeats"])
     timeout_seconds = int(config["timeout_seconds"])
     test_cases = config["test_cases"]
+    selected_indices = set(map(int, config.get("test_case_indices", range(1, len(test_cases) + 1))))
+    selected_cases = [
+        (index, case) for index, case in enumerate(test_cases, start=1)
+        if index in selected_indices
+    ]
     state = json.loads((BASE_DIR / "deployment-state.json").read_text(encoding="utf-8"))
     expiry = datetime.fromisoformat(state["expires_at"].replace("Z", "+00:00"))
     if expiry <= datetime.now(timezone.utc):
@@ -125,7 +130,7 @@ def main() -> None:
     verifier = work / "matrix-verifier"
     compile_verifier(source, verifier)
     log(f"C++ 结果校验程序：{source}")
-    log(f"Hadoop 测试规格：{matrix_sizes}，测试项 {len(test_cases)} 组，每种重复 {repeats} 次，超时 {timeout_seconds} 秒")
+    log(f"Hadoop 测试规格：{matrix_sizes}，运行测试项 {[index for index, _ in selected_cases]}，每种重复 {repeats} 次，超时 {timeout_seconds} 秒")
 
     # 在主节点编译可分发的 Hadoop 程序
     log("上传源码并编译 Hadoop 程序……")
@@ -142,7 +147,7 @@ def main() -> None:
     report = BASE_DIR / "result.json"
     result_data = []
     write_result(report, result_data)
-    for case_index, case in enumerate(test_cases, start=1):
+    for case_index, case in selected_cases:
         num_reduce_tasks = int(case["num_reduce_tasks"])
         split_max_size = int(case["split_max_size"])
         block_size = int(case["block_size"])

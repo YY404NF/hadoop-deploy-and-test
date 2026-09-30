@@ -6,7 +6,7 @@
   // 实例规格。
   "instance_type": "ecs.e-c1m1.large",
   // 创建实例数量
-  "instance_count": 100,
+  "instance_count": 10,
   // ECS 名称和集群内网主机别名前缀
   "name_prefix": "hadoop-lab",
   // 已创建 VPC 的 ID

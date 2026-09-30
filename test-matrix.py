@@ -108,9 +108,7 @@ def main() -> None:
     matrix_sizes = config["matrix_sizes"]
     repeats = int(config["repeats"])
     timeout_seconds = int(config["timeout_seconds"])
-    num_reduce_tasks = int(config["num_reduce_tasks"])
-    split_max_size = int(config["split_max_size"])
-    block_size = int(config["block_size"])
+    test_cases = config["test_cases"]
     state = json.loads((BASE_DIR / "deployment-state.json").read_text(encoding="utf-8"))
     expiry = datetime.fromisoformat(state["expires_at"].replace("Z", "+00:00"))
     if expiry <= datetime.now(timezone.utc):
@@ -127,7 +125,7 @@ def main() -> None:
     verifier = work / "matrix-verifier"
     compile_verifier(source, verifier)
     log(f"C++ 结果校验程序：{source}")
-    log(f"Hadoop 测试规格：{matrix_sizes}，每种重复 {repeats} 次，超时 {timeout_seconds} 秒，切片上限 {split_max_size} 字节，Reduce {num_reduce_tasks} 个，分块 {block_size}×{block_size}")
+    log(f"Hadoop 测试规格：{matrix_sizes}，测试项 {len(test_cases)} 组，每种重复 {repeats} 次，超时 {timeout_seconds} 秒")
 
     # 在主节点编译可分发的 Hadoop 程序
     log("上传源码并编译 Hadoop 程序……")
@@ -144,60 +142,97 @@ def main() -> None:
     report = BASE_DIR / "result.json"
     result_data = []
     write_result(report, result_data)
-    for n in matrix_sizes:
-        log(f"矩阵规格 {n}×{n}：生成 Hadoop 分块输入……")
-        local_input, hdfs_input = make_hadoop_input(n, block_size, rng, work)
-        local_result = work / f"local-result-{n}.bin"
-        subprocess.run([
-            str(verifier), "verify", str(local_input), str(local_result), str(n),
-        ], check=True)
-        remote_reference = f"{remote_root}-reference-{n}.bin"
-        copy_to(master, user, key_path, local_result, remote_reference)
-        hdfs_input_dir = f"{hdfs_root}/input-{n}"
-        copy_to(master, user, key_path, hdfs_input, f"{remote_root}-input-{n}.txt")
-        ssh(master, user, key_path, (
-            f"HADOOP_HOME={shlex.quote(home)} bash {remote_script} put "
-            f"{shlex.quote(f'{remote_root}-input-{n}.txt')} {shlex.quote(hdfs_input_dir)}"
-        ))
+    for case_index, case in enumerate(test_cases, start=1):
+        num_reduce_tasks = int(case["num_reduce_tasks"])
+        split_max_size = int(case["split_max_size"])
+        block_size = int(case["block_size"])
+        log(f"测试项 {case_index}/{len(test_cases)}：Reduce {num_reduce_tasks} 个，切片 {split_max_size} 字节，分块 {block_size}×{block_size}")
+        for n in matrix_sizes:
+            log(f"矩阵规格 {n}×{n}：生成 Hadoop 分块输入……")
+            local_input, hdfs_input = make_hadoop_input(n, block_size, rng, work)
+            local_result = work / f"local-result-{case_index}-{n}.bin"
+            subprocess.run([
+                str(verifier), "verify", str(local_input), str(local_result), str(n),
+            ], check=True)
+            remote_reference = f"{remote_root}-reference-{case_index}-{n}.bin"
+            copy_to(master, user, key_path, local_result, remote_reference)
+            hdfs_input_dir = f"{hdfs_root}/case-{case_index}/input-{n}"
+            remote_input = f"{remote_root}-input-{case_index}-{n}.txt"
+            copy_to(master, user, key_path, hdfs_input, remote_input)
+            ssh(master, user, key_path, (
+                f"HADOOP_HOME={shlex.quote(home)} bash {remote_script} put "
+                f"{shlex.quote(remote_input)} {shlex.quote(hdfs_input_dir)}"
+            ))
+            hdfs_stats = ssh(master, user, key_path, (
+                f"HADOOP_HOME={shlex.quote(home)} bash {remote_script} stats "
+                f"{shlex.quote(hdfs_input_dir)}"
+            ))
+            hdfs_block_count = int(re.search(r"HDFS_BLOCK_COUNT=([0-9]+)", hdfs_stats.stdout).group(1))
 
-        times = []
-        final_output = ""
-        for repeat in range(repeats):
-            output_dir = f"{hdfs_root}/output-{n}-{repeat}"
-            final_output = output_dir
-            progress(f"{n}×{n} Hadoop 作业 {repeat + 1}/{repeats}……")
-            run = ssh(master, user, key_path, (
-                f"HADOOP_HOME={shlex.quote(home)} bash {remote_script} job "
-                f"{shlex.quote(remote_root)} {shlex.quote(hdfs_input_dir)} "
-                f"{shlex.quote(output_dir)} {n} {repeat} {block_size} "
-                f"{split_max_size} {num_reduce_tasks} {timeout_seconds}"
-            ), timeout=600)
-            elapsed = float(re.search(r"JOB_SECONDS=([0-9.]+)", run.stdout).group(1))
-            times.append(elapsed)
-            progress(f"{n}×{n} Hadoop 作业 {repeat + 1}/{repeats} 完成，耗时 {elapsed:.6f} 秒")
-            print(flush=True)
+            times = []
+            map_task_counts = []
+            reduce_task_counts = []
+            map_input_record_counts = []
+            map_output_record_counts = []
+            shuffle_byte_counts = []
+            node_counts = []
+            final_output = ""
+            for repeat in range(repeats):
+                output_dir = f"{hdfs_root}/case-{case_index}/output-{n}-{repeat}"
+                final_output = output_dir
+                progress(f"测试项 {case_index}，{n}×{n} 作业 {repeat + 1}/{repeats}……")
+                run = ssh(master, user, key_path, (
+                    f"HADOOP_HOME={shlex.quote(home)} bash {remote_script} job "
+                    f"{shlex.quote(remote_root)} {shlex.quote(hdfs_input_dir)} "
+                    f"{shlex.quote(output_dir)} {n} {repeat} {block_size} "
+                    f"{split_max_size} {num_reduce_tasks} {timeout_seconds}"
+                ), timeout=600)
+                elapsed = float(re.search(r"JOB_SECONDS=([0-9.]+)", run.stdout).group(1))
+                map_tasks = int(re.search(r"MAP_TASKS=([0-9]+)", run.stdout).group(1))
+                reduce_tasks = int(re.search(r"REDUCE_TASKS=([0-9]+)", run.stdout).group(1))
+                map_input_records = int(re.search(r"MAP_INPUT_RECORDS=([0-9]+)", run.stdout).group(1))
+                map_output_records = int(re.search(r"MAP_OUTPUT_RECORDS=([0-9]+)", run.stdout).group(1))
+                shuffle_bytes = int(re.search(r"SHUFFLE_BYTES=([0-9]+)", run.stdout).group(1))
+                nodes_used = int(re.search(r"NODES_USED=([0-9]+)", run.stdout).group(1))
+                times.append(elapsed)
+                map_task_counts.append(map_tasks)
+                reduce_task_counts.append(reduce_tasks)
+                map_input_record_counts.append(map_input_records)
+                map_output_record_counts.append(map_output_records)
+                shuffle_byte_counts.append(shuffle_bytes)
+                node_counts.append(nodes_used)
+                progress(f"测试项 {case_index}，{n}×{n} 作业 {repeat + 1}/{repeats} 完成，耗时 {elapsed:.6f} 秒")
+                print(flush=True)
 
-        remote_result = f"{remote_root}-result-{n}.txt"
-        ssh(master, user, key_path, (
-            f"HADOOP_HOME={shlex.quote(home)} bash {remote_script} getmerge "
-            f"{shlex.quote(final_output)} {shlex.quote(remote_result)}"
-        ))
-        checked = ssh(master, user, key_path, (
-            f"HADOOP_HOME={shlex.quote(home)} bash {remote_script} compare "
-            f"{shlex.quote(remote_root)} {shlex.quote(remote_reference)} "
-            f"{shlex.quote(remote_result)} {n} {block_size}"
-        ))
-        difference = float(re.search(r"MAX_ABS_ERROR=([0-9.eE+-]+)", checked.stdout).group(1))
-        log(f"{n}×{n} 云端结果校验通过，最大误差 {difference:.6g}")
-        result_data.append({
-            "size": n,
-            "num_reduce_tasks": num_reduce_tasks,
-            "split_max_size": split_max_size,
-            "block_size": block_size,
-            "times": [f"{seconds:.6f}" for seconds in times],
-        })
-        write_result(report, result_data)
-        log(f"{n}×{n} Hadoop 结果已追加到 result.json")
+            remote_result = f"{remote_root}-result-{case_index}-{n}.txt"
+            ssh(master, user, key_path, (
+                f"HADOOP_HOME={shlex.quote(home)} bash {remote_script} getmerge "
+                f"{shlex.quote(final_output)} {shlex.quote(remote_result)}"
+            ))
+            checked = ssh(master, user, key_path, (
+                f"HADOOP_HOME={shlex.quote(home)} bash {remote_script} compare "
+                f"{shlex.quote(remote_root)} {shlex.quote(remote_reference)} "
+                f"{shlex.quote(remote_result)} {n} {block_size}"
+            ))
+            difference = float(re.search(r"MAX_ABS_ERROR=([0-9.eE+-]+)", checked.stdout).group(1))
+            log(f"测试项 {case_index}，{n}×{n} 云端结果校验通过，最大误差 {difference:.6g}")
+            result_data.append({
+                "case_index": case_index,
+                "size": n,
+                "num_reduce_tasks": num_reduce_tasks,
+                "split_max_size": split_max_size,
+                "block_size": block_size,
+                "hdfs_block_count": hdfs_block_count,
+                "map_input_records": map_input_record_counts,
+                "map_output_records": map_output_record_counts,
+                "shuffle_bytes": shuffle_byte_counts,
+                "map_tasks": map_task_counts,
+                "reduce_tasks": reduce_task_counts,
+                "nodes_used": node_counts,
+                "times": [f"{seconds:.6f}" for seconds in times],
+            })
+            write_result(report, result_data)
+            log(f"测试项 {case_index}，{n}×{n} Hadoop 结果已追加到 result.json")
 
     log(f"测试完成")
 

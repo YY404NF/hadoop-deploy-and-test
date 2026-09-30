@@ -17,12 +17,13 @@ printf 'Asia/Shanghai\n' > /etc/timezone
 
 # 准备基础依赖、运行用户和 Hadoop 缓存目录
 if [ "$PHASE" = "prepare" ] || [ "$PHASE" = "all" ]; then
-    apt-get update
+    # 等待系统自动更新释放 dpkg 锁，最长等待 600 秒
+    apt-get -o DPkg::Lock::Timeout=600 update
     PACKAGES=(ca-certificates curl openssh-client openjdk-17-jdk libopenblas0)
     if [ "$ROLE" = "master" ]; then
         PACKAGES+=(g++ libopenblas-dev)
     fi
-    DEBIAN_FRONTEND=noninteractive apt-get install -y "${PACKAGES[@]}"
+    DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y "${PACKAGES[@]}"
     id -u "$RUN_USER" >/dev/null 2>&1 || useradd --create-home --shell /bin/bash "$RUN_USER"
 fi
 JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")"

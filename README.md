@@ -58,7 +58,7 @@ python3 deploy.py
 python3 test-matrix.py
 ```
 
-测试脚本会在 ECS Hadoop 集群上运行 `run-hadoopp-matrix` 进行自动测试。
+测试脚本会在 ECS Hadoop 集群上运行 `run-hadoopp-matrix.sh` 进行自动测试。
 
 测试脚本会在当前目录生成下列文件：
 

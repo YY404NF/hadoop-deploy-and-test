@@ -1,14 +1,47 @@
 {
   // 要计算的正方形矩阵阶数
   "matrix_sizes": [256, 512, 1024],
-  // 每种矩阵规格计算一次
+  // 每种矩阵规格重复计算次数
   "repeats": 1,
   // 每个 Hadoop 作业的最长时间（秒）
   "timeout_seconds": 300,
-  // 每个矩阵输出分配的 Reduce 任务数量
-  "num_reduce_tasks": 1,
-  // 每个 Map 输入切片的最大大小（字节）
-  "split_max_size": 1048576,
-  // 矩阵分块边长
-  "block_size": 64
+  // 作业1中的参数测试项
+  "test_cases": [
+    {
+      // 基准配置
+      "num_reduce_tasks": 1,
+      "split_max_size": 1048576,
+      "block_size": 64
+    },
+    {
+      // 增加 Reduce 并行度
+      "num_reduce_tasks": 4,
+      "split_max_size": 1048576,
+      "block_size": 64
+    },
+    {
+      // 进一步增加 Reduce 并行度
+      "num_reduce_tasks": 8,
+      "split_max_size": 1048576,
+      "block_size": 64
+    },
+    {
+      // 增大 Map 输入切片
+      "num_reduce_tasks": 4,
+      "split_max_size": 16777216,
+      "block_size": 64
+    },
+    {
+      // 减小矩阵分块
+      "num_reduce_tasks": 4,
+      "split_max_size": 1048576,
+      "block_size": 32
+    },
+    {
+      // 增大矩阵分块
+      "num_reduce_tasks": 4,
+      "split_max_size": 1048576,
+      "block_size": 128
+    }
+  ]
 }

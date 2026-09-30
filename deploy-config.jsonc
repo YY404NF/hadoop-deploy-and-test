@@ -20,7 +20,7 @@
   // 每台 ECS 的系统盘容量（GB）
   "system_disk_size_gb": 20,
   // 自动释放时间（分钟，服务端按分钟处理并向后取整）
-  "lifetime_minutes": 31,
+  "lifetime_minutes": 30,
   // 部署输出和测试代码共用的状态文件名
   "output_file": "deployment-state.json",
   // 本地生成的 SSH 私钥文件名
